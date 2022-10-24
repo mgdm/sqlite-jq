@@ -44,7 +44,7 @@ I would not advise doing this permanently. Then, you can load the resulting exte
 
 ## Things to be aware of
 
-This is, at present, an interesting hack with no tests. I intend to fix this.
+This is, at present, an interesting hack with no tests. I intend to fix this. Notably, I haven't tested the table-valued function with constraints much.
 
 This uses the [gojq](https://github.com/itchyny/gojq) implementation of `jq` by [itchyny](https://github.com/itchyny), which has [some differences](https://github.com/itchyny/gojq#difference-to-jq) from the canonical implementation but is easy to integrate with.
 
