@@ -1,6 +1,10 @@
 # sqlite-jq
 An extension for SQLite that adds functions for querying JSON data using JQ syntax.
 
+## Why?
+
+SQLite does have [JSON functions and operators](https://www.sqlite.org/json1.html) already but I have occasionally done a bit of data mangling in `jq` prior to loading it into SQLite, and sometimes I've wanted to be able to do all of that in one place. `jq`'s language is a bit more flexible than the built-in JSON functions in SQLite for some purposes, particularly when iterating over large deeply-nested objects.
+
 ## The `jq()` function
 
 This will return the result of the specified JQ expression run against the supplied JSON.
