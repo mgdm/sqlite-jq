@@ -98,6 +98,13 @@ func init() {
 		if err := api.CreateFunction("jq", &Jq{}); err != nil {
 			return sqlite.SQLITE_ERROR, err
 		}
+
+		if err := api.CreateModule("jq_each", &JqEachModule{}, sqlite.EponymousOnly(true)); err != nil {
+			return sqlite.SQLITE_ERROR, err
+		}
+
 		return sqlite.SQLITE_OK, nil
 	})
 }
+
+func main() {}
