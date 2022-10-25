@@ -46,7 +46,7 @@ export LD_LIBRARY_PATH=$PWD:LD_LIBRARY_PATH
 
 I would not advise doing this permanently. Then, you can load the resulting extension with `.load sqlite_jq`.
 
-## Things to be aware of
+## Things to be aware of
 
 This is, at present, an interesting hack with no tests. I intend to fix this. Notably, I haven't tested the table-valued function with constraints much.
 
