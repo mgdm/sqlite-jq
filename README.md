@@ -36,7 +36,7 @@ select * from test, jq_each(test.raw, '.[].repo.name');
 
 ## Using
 
-On macOS, run `make`, then you can load the resulting extension into `sqlite3` using `.load sqlite_jq.so`.
+On macOS, run `make`, then you can load the resulting extension into `sqlite3` using `.load sqlite_jq.dylib`. Depending on which toolchain you use to compile it, you may end up with a `.dylib` or a `.so`.
 
 On Linux, run `make` to build, though you will then have to place the extension somewhere on `LD_LIBRARY_PATH`. Alternatively, for testing, you can set this directly:
 
@@ -45,6 +45,22 @@ export LD_LIBRARY_PATH=$PWD:LD_LIBRARY_PATH
 ```
 
 I would not advise doing this permanently. Then, you can load the resulting extension with `.load sqlite_jq`.
+
+## Known issues
+
+If you load the extension, and then open a new database, you'll need to re-load the extension again. There are functions in the C API to make the extension persistent to avoid this, but they're not currently exposed by the `sqlite` extension I'm using, nor by one of its dependencies.
+
+You can't currently write a query like this:
+
+```sql
+select * from jq_each(raw_data.raw, '.things[]');
+```
+
+instead you must write it as follows:
+
+```sql
+select * from raw_data, jq_each(raw, '.things[]');
+```
 
 ## Things to be aware of
 
