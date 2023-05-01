@@ -65,21 +65,21 @@ func formatResult(ctx *sqlite.Context, v interface{}) {
 		return
 	}
 
-	switch v.(type) {
+	switch v := v.(type) {
 	case bool:
-		if v.(bool) {
+		if v {
 			ctx.ResultInt(1)
 		} else {
 			ctx.ResultInt(0)
 		}
 	case int:
-		ctx.ResultInt(v.(int))
+		ctx.ResultInt(v)
 	case int64:
-		ctx.ResultInt64(v.(int64))
+		ctx.ResultInt64(v)
 	case float64:
-		ctx.ResultFloat(v.(float64))
+		ctx.ResultFloat(v)
 	case string:
-		ctx.ResultText(v.(string))
+		ctx.ResultText(v)
 	default:
 		tmp, err := json.Marshal(v)
 
