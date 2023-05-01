@@ -15,6 +15,8 @@ test-sql: build
 test-table: build
 	sqlite3 :memory: < test_table.sql
 
+test: build test-sql test-table
+
 clean:
 	rm -f *.$(LIBRARY_EXTENSION)
 
