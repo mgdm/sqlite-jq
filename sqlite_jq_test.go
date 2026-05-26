@@ -8,7 +8,7 @@ import (
 	_ "github.com/mgdm/sqlite-jq/internal/testhelper"
 )
 
-func openDB(t *testing.T) *sql.DB {
+func openDB(t testing.TB) *sql.DB {
 	t.Helper()
 	db, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
@@ -18,7 +18,7 @@ func openDB(t *testing.T) *sql.DB {
 	return db
 }
 
-func queryOne(t *testing.T, db *sql.DB, query string, args ...interface{}) *sql.Row {
+func queryOne(t testing.TB, db *sql.DB, query string, args ...interface{}) *sql.Row {
 	t.Helper()
 	return db.QueryRow(query, args...)
 }

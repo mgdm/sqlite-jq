@@ -3,10 +3,29 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	"github.com/itchyny/gojq"
 	"go.riyazali.net/sqlite"
 )
+
+var queryCache sync.Map // map[string]*gojq.Code
+
+func compileQuery(s string) (*gojq.Code, error) {
+	if v, ok := queryCache.Load(s); ok {
+		return v.(*gojq.Code), nil
+	}
+	q, err := gojq.Parse(s)
+	if err != nil {
+		return nil, err
+	}
+	code, err := gojq.Compile(q)
+	if err != nil {
+		return nil, err
+	}
+	queryCache.Store(s, code)
+	return code, nil
+}
 
 type resultSetter interface {
 	ResultNull()
@@ -31,8 +50,7 @@ func (m *Jq) Apply(ctx *sqlite.Context, values ...sqlite.Value) {
 		return
 	}
 
-	query, err := gojq.Parse(values[1].Text())
-
+	code, err := compileQuery(values[1].Text())
 	if err != nil {
 		ctx.ResultError(fmt.Errorf("error parsing JQ query: %w", err))
 		return
@@ -40,7 +58,7 @@ func (m *Jq) Apply(ctx *sqlite.Context, values ...sqlite.Value) {
 
 	var rows []interface{}
 
-	iter := query.Run(val)
+	iter := code.Run(val)
 	for {
 		v, ok := iter.Next()
 

@@ -75,13 +75,13 @@ func (c *JqEachCursor) Filter(idxNum int, _ string, values ...sqlite.Value) erro
 		return fmt.Errorf("error parsing JSON data: %w", err)
 	}
 
-	query, err := gojq.Parse(values[1].Text())
+	code, err := compileQuery(values[1].Text())
 	if err != nil {
 		return fmt.Errorf("error parsing JQ query: %w", err)
 	}
 
 	c.rowid = 0
-	c.iter = query.Run(val)
+	c.iter = code.Run(val)
 
 	return c.Next()
 }
