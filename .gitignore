@@ -13,3 +13,9 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+# Downloaded SQLite amalgamation (shell.c + headers) and build artefacts
+sqlite/
+sqlite_jq.a
+sqlite_jq.h
+sqlite3-jq

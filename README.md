@@ -36,19 +36,51 @@ select * from test, jq_each(test.raw, '.[].repo.name');
 
 ## Using
 
-On macOS, run `make`, then you can load the resulting extension into `sqlite3` using `.load sqlite_jq.dylib`. Depending on which toolchain you use to compile it, you may end up with a `.dylib` or a `.so`.
+### Standalone binary
 
-On Linux, run `make` to build, though you will then have to place the extension somewhere on `LD_LIBRARY_PATH`. Alternatively, for testing, you can set this directly:
+The easiest way to use sqlite-jq is the self-contained `sqlite3-jq` binary, which is a drop-in replacement for the standard `sqlite3` CLI. The `jq()` and `jq_each()` functions are always available — no `.load` step required.
+
+You'll need the SQLite amalgamation downloaded first (one-time setup):
+
+```shell
+make fetch-sqlite
+make sqlite3-jq
+```
+
+Then use it exactly like the standard `sqlite3` shell:
+
+```shell
+./sqlite3-jq :memory: "SELECT jq('{\"a\":1}', '.a')"
+# 1
+
+./sqlite3-jq :memory: "SELECT value FROM jq_each('[1,2,3]', '.[]')"
+# 1
+# 2
+# 3
+
+./sqlite3-jq mydata.db
+```
+
+### Dynamic library
+
+On macOS, run `make`, then load the extension into `sqlite3`:
+
+```shell
+make
+sqlite3 mydata.db
+sqlite> .load sqlite_jq.dylib
+```
+
+On Linux, run `make` to build. You will need to place the extension somewhere on `LD_LIBRARY_PATH`, or for a quick test:
 
 ```shell
 export LD_LIBRARY_PATH=$PWD:$LD_LIBRARY_PATH
+sqlite3 mydata.db ".load sqlite_jq"
 ```
-
-I would not advise doing this permanently. Then, you can load the resulting extension with `.load sqlite_jq`.
 
 ## Known issues
 
-If you load the extension, and then open a new database, you'll need to re-load the extension again. There are functions in the C API to make the extension persistent to avoid this, but they're not currently exposed by the `sqlite` extension I'm using, nor by one of its dependencies.
+When using the dynamic library with the standard `sqlite3` shell, if you open a new database within the same session you'll need to re-load the extension. This doesn't affect the standalone `sqlite3-jq` binary, which registers the extension for every connection automatically.
 
 You can't currently write a query like this:
 
@@ -64,7 +96,7 @@ select * from raw_data, jq_each(raw, '.things[]');
 
 ## Things to be aware of
 
-This is, at present, an interesting hack with no tests. I intend to fix this. Notably, I haven't tested the table-valued function with constraints much.
+This is an interesting hack. The table-valued function with non-trivial constraints hasn't been tested much.
 
 This uses the [gojq](https://github.com/itchyny/gojq) implementation of `jq` by [itchyny](https://github.com/itchyny), which has [some differences](https://github.com/itchyny/gojq#difference-to-jq) from the canonical implementation but is easy to integrate with.
 

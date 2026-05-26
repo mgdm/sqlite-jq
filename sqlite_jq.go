@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"sync"
@@ -43,7 +44,9 @@ func (m *Jq) Args() int           { return 2 }
 func (m *Jq) Deterministic() bool { return true }
 func (m *Jq) Apply(ctx *sqlite.Context, values ...sqlite.Value) {
 	var val interface{}
-	err := json.Unmarshal(values[0].Blob(), &val)
+	dec := json.NewDecoder(bytes.NewReader(values[0].Blob()))
+	dec.UseNumber()
+	err := dec.Decode(&val)
 
 	if err != nil {
 		ctx.ResultError(fmt.Errorf("error parsing JSON data: %w", err))
@@ -96,6 +99,14 @@ func formatResult(ctx resultSetter, v interface{}) {
 			ctx.ResultInt(1)
 		} else {
 			ctx.ResultInt(0)
+		}
+	case json.Number:
+		if i, err := v.Int64(); err == nil {
+			ctx.ResultInt64(i)
+		} else if f, err := v.Float64(); err == nil {
+			ctx.ResultFloat(f)
+		} else {
+			ctx.ResultText(v.String())
 		}
 	case int:
 		ctx.ResultInt(v)

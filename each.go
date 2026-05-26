@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 
@@ -71,7 +72,9 @@ func (c *JqEachCursor) Filter(idxNum int, _ string, values ...sqlite.Value) erro
 	}
 
 	var val interface{}
-	if err := json.Unmarshal(values[0].Blob(), &val); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(values[0].Blob()))
+	dec.UseNumber()
+	if err := dec.Decode(&val); err != nil {
 		return fmt.Errorf("error parsing JSON data: %w", err)
 	}
 
