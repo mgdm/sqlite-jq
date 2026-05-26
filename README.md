@@ -41,7 +41,7 @@ On macOS, run `make`, then you can load the resulting extension into `sqlite3` u
 On Linux, run `make` to build, though you will then have to place the extension somewhere on `LD_LIBRARY_PATH`. Alternatively, for testing, you can set this directly:
 
 ```shell
-export LD_LIBRARY_PATH=$PWD:LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$PWD:$LD_LIBRARY_PATH
 ```
 
 I would not advise doing this permanently. Then, you can load the resulting extension with `.load sqlite_jq`.

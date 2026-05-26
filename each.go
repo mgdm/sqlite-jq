@@ -8,17 +8,6 @@ import (
 	"go.riyazali.net/sqlite"
 )
 
-//const (
-//	JEACH_KEY = iota
-//	JEACH_VALUE
-//	JEACH_TYPE
-//	JEACH_ATOM
-//	JEACH_ID
-//	JEACH_PARENT
-//	JEACH_FULLKEY
-//	JEACH_PATH
-//)
-
 type JqEachModule struct{}
 
 func (m *JqEachModule) Connect(_ *sqlite.Conn, _ []string, declare func(string) error) (sqlite.VirtualTable, error) {
@@ -36,7 +25,6 @@ func (s *JqEachTable) Destroy() error    { return nil }
 
 type JqEachCursor struct {
 	rowid int64
-	query *gojq.Query
 	iter  gojq.Iter
 	value *interface{}
 }
@@ -54,7 +42,6 @@ func (s *JqEachTable) BestIndex(input *sqlite.IndexInfoInput) (*sqlite.IndexInfo
 			continue
 		}
 
-		/* We need all of the constraints to be usable */
 		if !con.Usable {
 			return nil, sqlite.SQLITE_CONSTRAINT
 		}
@@ -76,7 +63,7 @@ func (c *JqEachCursor) Filter(idxNum int, _ string, values ...sqlite.Value) erro
 		return sqlite.SQLITE_OK
 	}
 
-	for _, v := range values { // if any of the constraints have a NULL value, then return no rows.
+	for _, v := range values {
 		if v.Type() == sqlite.SQLITE_NULL {
 			c.rowid = -1
 			return sqlite.SQLITE_OK
@@ -84,25 +71,18 @@ func (c *JqEachCursor) Filter(idxNum int, _ string, values ...sqlite.Value) erro
 	}
 
 	var val interface{}
-	err := json.Unmarshal(values[0].Blob(), &val)
-
-	if err != nil {
-		err = fmt.Errorf("error parsing JSON data: %v", err)
-		return err
+	if err := json.Unmarshal(values[0].Blob(), &val); err != nil {
+		return fmt.Errorf("error parsing JSON data: %w", err)
 	}
 
 	query, err := gojq.Parse(values[1].Text())
-
 	if err != nil {
-		err = fmt.Errorf("error parsing JQ query: %v", err)
-		return err
+		return fmt.Errorf("error parsing JQ query: %w", err)
 	}
 
 	c.rowid = 0
-	c.query = query
 	c.iter = query.Run(val)
 
-	/* The iterator won't be at the first row, so manually move it */
 	return c.Next()
 }
 
@@ -115,8 +95,7 @@ func (c *JqEachCursor) Next() error {
 	}
 
 	if err, ok := v.(error); ok {
-		err = fmt.Errorf("error creating result: %v", err)
-		return err
+		return fmt.Errorf("error creating result: %w", err)
 	}
 
 	c.rowid += 1
@@ -127,38 +106,9 @@ func (c *JqEachCursor) Next() error {
 func (c *JqEachCursor) Column(ctx *sqlite.VirtualTableContext, i int) error {
 	if c.value == nil {
 		ctx.ResultNull()
-		return sqlite.SQLITE_OK
+		return nil
 	}
-
-	v := *c.value
-
-	switch v := v.(type) {
-	case bool:
-		if v {
-			ctx.ResultInt(1)
-		} else {
-			ctx.ResultInt(0)
-		}
-	case int:
-		ctx.ResultInt(v)
-	case int64:
-		ctx.ResultInt64(v)
-	case float64:
-		ctx.ResultFloat(v)
-	case string:
-		ctx.ResultText(v)
-	default:
-		tmp, err := json.Marshal(v)
-
-		if err != nil {
-			err = fmt.Errorf("error marshalling result data: %v", err)
-			ctx.ResultError(err)
-			return nil
-		}
-
-		ctx.ResultBlob(tmp)
-	}
-
+	formatResult(ctx, *c.value)
 	return nil
 }
 

@@ -8,6 +8,16 @@ import (
 	"go.riyazali.net/sqlite"
 )
 
+type resultSetter interface {
+	ResultNull()
+	ResultInt(int)
+	ResultInt64(int64)
+	ResultFloat(float64)
+	ResultText(string)
+	ResultBlob([]byte)
+	ResultError(error)
+}
+
 type Jq struct{}
 
 func (m *Jq) Args() int           { return 2 }
@@ -17,16 +27,14 @@ func (m *Jq) Apply(ctx *sqlite.Context, values ...sqlite.Value) {
 	err := json.Unmarshal(values[0].Blob(), &val)
 
 	if err != nil {
-		err = fmt.Errorf("error parsing JSON data: %v", err)
-		ctx.ResultError(err)
+		ctx.ResultError(fmt.Errorf("error parsing JSON data: %w", err))
 		return
 	}
 
 	query, err := gojq.Parse(values[1].Text())
 
 	if err != nil {
-		err = fmt.Errorf("error parsing JQ query: %v", err)
-		ctx.ResultError(err)
+		ctx.ResultError(fmt.Errorf("error parsing JQ query: %w", err))
 		return
 	}
 
@@ -41,8 +49,7 @@ func (m *Jq) Apply(ctx *sqlite.Context, values ...sqlite.Value) {
 		}
 
 		if err, ok := v.(error); ok {
-			err = fmt.Errorf("error creating result: %v", err)
-			ctx.ResultError(err)
+			ctx.ResultError(fmt.Errorf("error creating result: %w", err))
 			return
 		}
 
@@ -59,7 +66,7 @@ func (m *Jq) Apply(ctx *sqlite.Context, values ...sqlite.Value) {
 	}
 }
 
-func formatResult(ctx *sqlite.Context, v interface{}) {
+func formatResult(ctx resultSetter, v interface{}) {
 	if v == nil {
 		ctx.ResultNull()
 		return
@@ -84,8 +91,7 @@ func formatResult(ctx *sqlite.Context, v interface{}) {
 		tmp, err := json.Marshal(v)
 
 		if err != nil {
-			err = fmt.Errorf("error marshalling result data: %v", err)
-			ctx.ResultError(err)
+			ctx.ResultError(fmt.Errorf("error marshalling result data: %w", err))
 			return
 		}
 

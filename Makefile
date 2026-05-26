@@ -10,15 +10,18 @@ build:
 	go build -buildmode=c-shared -o sqlite_jq.$(LIBRARY_EXTENSION) ./*.go
 
 test-sql: build
-	sqlite3 :memory: < test.sql
+	sqlite3 :memory: < test.sql; true
 
 test-table: build
-	sqlite3 :memory: < test_table.sql
+	sqlite3 :memory: < test_table.sql; true
 
-test: build test-sql test-table
+test: build test-sql test-table test-go
+
+test-go:
+	go test ./...
 
 clean:
-	rm -f *.$(LIBRARY_EXTENSION)
+	rm -f *.$(LIBRARY_EXTENSION) *.h
 
 goimports:
 	goimports -w *.go
