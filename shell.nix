@@ -1,17 +1,3 @@
-{ pkgs ? import <nixpkgs> { } }:
-
-pkgs.mkShell {
-  buildInputs = [
-    pkgs.go
-    pkgs.gotools
-    pkgs.gopls
-    pkgs.go-outline
-    pkgs.gopkgs
-    pkgs.gocode-gomod
-    pkgs.godef
-    pkgs.golint
-    pkgs.sqlite-interactive
-    pkgs.gojq
-    pkgs.golangci-lint
-  ];
-}
+# Compatibility shim for `nix-shell` users.
+# For flake-aware Nix, use `nix develop` instead.
+(builtins.getFlake (toString ./.)).devShells.${builtins.currentSystem}.default
