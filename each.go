@@ -31,26 +31,35 @@ type JqEachCursor struct {
 }
 
 func (s *JqEachTable) BestIndex(input *sqlite.IndexInfoInput) (*sqlite.IndexInfoOutput, error) {
-	var args = 0
+	var args int
+	var jsonArgv, queryArgv int
 
-	var output = &sqlite.IndexInfoOutput{
+	output := &sqlite.IndexInfoOutput{
 		ConstraintUsage: make([]*sqlite.ConstraintUsage, len(input.Constraints)),
 		EstimatedCost:   1000,
 	}
 
 	for j, con := range input.Constraints {
-		if con.ColumnIndex < 1 {
+		// Only consume EQ constraints on the two hidden input columns.
+		if con.ColumnIndex < 1 || con.Op != sqlite.INDEX_CONSTRAINT_EQ {
 			continue
 		}
-
 		if !con.Usable {
 			return nil, sqlite.SQLITE_CONSTRAINT
 		}
-
-		args += 1
+		args++
 		output.ConstraintUsage[j] = &sqlite.ConstraintUsage{ArgvIndex: args, Omit: true}
+		switch con.ColumnIndex {
+		case 1:
+			jsonArgv = args
+		case 2:
+			queryArgv = args
+		}
 	}
 
+	// Encode which argv slot holds json (low nibble) and query (high nibble).
+	// A zero nibble means that parameter was not provided.
+	output.IndexNumber = jsonArgv | (queryArgv << 4)
 	return output, nil
 }
 
@@ -59,26 +68,30 @@ func (c *JqEachCursor) Rowid() (int64, error) {
 }
 
 func (c *JqEachCursor) Filter(idxNum int, _ string, values ...sqlite.Value) error {
-	if len(values) == 0 {
+	jsonArgv := idxNum & 0xf
+	queryArgv := (idxNum >> 4) & 0xf
+
+	if jsonArgv == 0 || queryArgv == 0 {
 		c.rowid = -1
 		return sqlite.SQLITE_OK
 	}
 
-	for _, v := range values {
-		if v.Type() == sqlite.SQLITE_NULL {
-			c.rowid = -1
-			return sqlite.SQLITE_OK
-		}
+	jsonVal := values[jsonArgv-1]
+	queryVal := values[queryArgv-1]
+
+	if jsonVal.Type() == sqlite.SQLITE_NULL || queryVal.Type() == sqlite.SQLITE_NULL {
+		c.rowid = -1
+		return sqlite.SQLITE_OK
 	}
 
 	var val interface{}
-	dec := json.NewDecoder(bytes.NewReader(values[0].Blob()))
+	dec := json.NewDecoder(bytes.NewReader(jsonVal.Blob()))
 	dec.UseNumber()
 	if err := dec.Decode(&val); err != nil {
 		return fmt.Errorf("error parsing JSON data: %w", err)
 	}
 
-	code, err := compileQuery(values[1].Text())
+	code, err := compileQuery(queryVal.Text())
 	if err != nil {
 		return fmt.Errorf("error parsing JQ query: %w", err)
 	}

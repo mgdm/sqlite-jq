@@ -281,3 +281,257 @@ func TestJqEachObjects(t *testing.T) {
 		t.Errorf("got %d rows, want 2", count)
 	}
 }
+
+func TestJqEachEmpty(t *testing.T) {
+	db := openDB(t)
+	rows, err := db.Query(`SELECT value FROM jq_each('[]', '.[]')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	count := 0
+	for rows.Next() {
+		count++
+	}
+	if count != 0 {
+		t.Errorf("got %d rows for empty array, want 0", count)
+	}
+}
+
+func TestJqEachInvalidJSON(t *testing.T) {
+	db := openDB(t)
+	rows, err := db.Query(`SELECT value FROM jq_each('not json', '.[]')`)
+	if err != nil {
+		// Error at query time is acceptable.
+		return
+	}
+	defer rows.Close()
+	// Error may also surface when iterating rows.
+	for rows.Next() {
+	}
+	if err := rows.Err(); err == nil {
+		t.Error("expected error for invalid JSON input, got nil")
+	}
+}
+
+func TestJqEachInvalidQuery(t *testing.T) {
+	db := openDB(t)
+	rows, err := db.Query(`SELECT value FROM jq_each('[1,2,3]', '???invalid')`)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+	}
+	if err := rows.Err(); err == nil {
+		t.Error("expected error for invalid jq query, got nil")
+	}
+}
+
+func TestJqEachMixedTypes(t *testing.T) {
+	db := openDB(t)
+	rows, err := db.Query(`SELECT value, typeof(value) FROM jq_each('[1,"a",null,true]', '.[]')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+
+	type row struct {
+		val interface{}
+		typ string
+	}
+	var got []row
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.val, &r.typ); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, r)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(got) != 4 {
+		t.Fatalf("got %d rows, want 4", len(got))
+	}
+	if got[0].typ != "integer" {
+		t.Errorf("row 0 type: got %q, want %q", got[0].typ, "integer")
+	}
+	if got[1].typ != "text" {
+		t.Errorf("row 1 type: got %q, want %q", got[1].typ, "text")
+	}
+	if got[2].typ != "null" {
+		t.Errorf("row 2 type: got %q, want %q", got[2].typ, "null")
+	}
+	if got[3].typ != "integer" {
+		t.Errorf("row 3 type (bool): got %q, want %q", got[3].typ, "integer")
+	}
+}
+
+func TestJqEachSQLWhere(t *testing.T) {
+	// SQLite post-filters on the value column; jq_each returns all 3 rows,
+	// SQLite discards the one that doesn't satisfy value > 1.
+	db := openDB(t)
+	rows, err := db.Query(`SELECT value FROM jq_each('[1,2,3]', '.[]') WHERE value > 1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+
+	var got []int64
+	for rows.Next() {
+		var v int64
+		if err := rows.Scan(&v); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, v)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %v, want [2 3]", got)
+	}
+	if got[0] != 2 || got[1] != 3 {
+		t.Errorf("got %v, want [2 3]", got)
+	}
+}
+
+func TestJqEachDeepExtraction(t *testing.T) {
+	db := openDB(t)
+	var got int64
+	err := db.QueryRow(`SELECT value FROM jq_each('[{"a":{"b":42}}]', '.[].a.b')`).Scan(&got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != 42 {
+		t.Errorf("got %d, want 42", got)
+	}
+}
+
+func TestJqEachMultiExpr(t *testing.T) {
+	db := openDB(t)
+	rows, err := db.Query(`SELECT value FROM jq_each('{"x":1,"y":2}', '.x, .y')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+
+	var got []int64
+	for rows.Next() {
+		var v int64
+		if err := rows.Scan(&v); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, v)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %v, want [1 2]", got)
+	}
+	if got[0] != 1 || got[1] != 2 {
+		t.Errorf("got %v, want [1 2]", got)
+	}
+}
+
+func TestJqEachJoin(t *testing.T) {
+	db := openDB(t)
+	if _, err := db.Exec(`CREATE TABLE t(raw TEXT)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO t VALUES ('[{"name":"alice"}]'), ('[{"name":"bob"}]')`); err != nil {
+		t.Fatal(err)
+	}
+
+	rows, err := db.Query(`SELECT value FROM t, jq_each(t.raw, '.[].name') ORDER BY value`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+
+	var got []string
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, v)
+	}
+	want := []string{"alice", "bob"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("row %d: got %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestJqEachRowOrder(t *testing.T) {
+	db := openDB(t)
+	rows, err := db.Query(`SELECT value FROM jq_each('["c","a","b"]', '.[]')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+
+	var got []string
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, v)
+	}
+	want := []string{"c", "a", "b"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("position %d: got %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+// Tests that required the BestIndex/Filter code fix:
+
+func TestJqEachMissingQuery(t *testing.T) {
+	// Calling jq_each with only the json argument (no query) must return 0 rows,
+	// not panic with an index-out-of-range accessing values[1].
+	db := openDB(t)
+	rows, err := db.Query(`SELECT value FROM jq_each('[1,2,3]')`)
+	if err != nil {
+		// Error at query-plan time is also acceptable.
+		return
+	}
+	defer rows.Close()
+	count := 0
+	for rows.Next() {
+		count++
+	}
+	if err := rows.Err(); err != nil {
+		// Runtime error is acceptable; what's not acceptable is a panic.
+		return
+	}
+	if count != 0 {
+		t.Errorf("got %d rows with missing query arg, want 0", count)
+	}
+}
+
+func TestJqEachNullQuery(t *testing.T) {
+	db := openDB(t)
+	rows, err := db.Query(`SELECT value FROM jq_each('[1,2,3]', NULL)`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	count := 0
+	for rows.Next() {
+		count++
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Errorf("got %d rows for NULL query, want 0", count)
+	}
+}
